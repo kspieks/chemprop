@@ -22,7 +22,8 @@ class MoleculeModel(nn.Module):
                            outputting the actual property predictions.
         """
         super(MoleculeModel, self).__init__()
-
+        self.args = args
+        self.device = args.device
         self.classification = args.dataset_type == 'classification'
         self.multiclass = args.dataset_type == 'multiclass'
         self.featurizer = featurizer
@@ -76,6 +77,8 @@ class MoleculeModel(nn.Module):
 
         if args.atom_descriptors == 'descriptor':
             first_linear_dim += args.atom_descriptors_size
+        if args.additional_ffn_inputs_columns:
+            first_linear_dim += len(args.additional_ffn_inputs_columns)
 
         dropout = nn.Dropout(args.dropout)
         activation = get_activation_function(args.activation)
@@ -177,8 +180,12 @@ class MoleculeModel(nn.Module):
             return self.featurize(batch, features_batch, atom_descriptors_batch,
                                   atom_features_batch, bond_features_batch)
 
-        output = self.ffn(self.encoder(batch, features_batch, atom_descriptors_batch,
-                                       atom_features_batch, bond_features_batch))
+        encoder_output = self.encoder(batch, features_batch, atom_descriptors_batch, atom_features_batch, bond_features_batch)
+
+        if self.args.additional_ffn_inputs_columns:
+            additional_inputs = batch[0].additional_ffn_inputs.to(self.device)
+            encoder_output = torch.cat((encoder_output, additional_inputs.float()), dim=-1)
+        output = self.ffn(encoder_output)
 
         # Don't apply sigmoid during training b/c using BCEWithLogitsLoss
         if self.classification and not self.training:

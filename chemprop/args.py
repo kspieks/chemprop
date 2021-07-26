@@ -225,6 +225,8 @@ class TrainArgs(CommonArgs):
     """
     ignore_columns: List[str] = None
     """Name of the columns to ignore when :code:`target_columns` is not provided."""
+    additional_ffn_inputs_columns: List[str] = None
+    """Name of columns containing values that are appended to the learned feature vector after aggregation before the readout phase"""
     dataset_type: Literal['regression', 'classification', 'multiclass']
     """Type of dataset. This determines the loss function used during training."""
     multiclass_num_classes: int = 3

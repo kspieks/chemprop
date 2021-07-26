@@ -259,6 +259,7 @@ class MolGraph:
     * :code:`a2b`: A mapping from an atom index to a list of incoming bond indices.
     * :code:`b2a`: A mapping from a bond index to the index of the atom the bond originates from.
     * :code:`b2revb`: A mapping from a bond index to the index of the reverse bond.
+    * :code:`additional_ffn_inputs`: Additional inputs for the fnn, such as dH_rxn or QM descriptors
     * :code:`overwrite_default_atom_features`: A boolean to overwrite default atom descriptors.
     * :code:`overwrite_default_bond_features`: A boolean to overwrite default bond descriptors.
     """
@@ -266,12 +267,14 @@ class MolGraph:
     def __init__(self, mol: Union[str, Chem.Mol, Tuple[Chem.Mol, Chem.Mol]],
                  atom_features_extra: np.ndarray = None,
                  bond_features_extra: np.ndarray = None,
+                 additional_ffn_inputs: np.ndarray = None,
                  overwrite_default_atom_features: bool = False,
                  overwrite_default_bond_features: bool = False):
         """
         :param mol: A SMILES or an RDKit molecule.
         :param atom_features_extra: A list of 2D numpy array containing additional atom features to featurize the molecule
         :param bond_features_extra: A list of 2D numpy array containing additional bond features to featurize the molecule
+        :param additional_ffn_inputs: Additional inputs for the fnn, such as dH_rxn or QM descriptors
         :param overwrite_default_atom_features: Boolean to overwrite default atom features by atom_features instead of concatenating
         :param overwrite_default_bond_features: Boolean to overwrite default bond features by bond_features instead of concatenating
         """
@@ -293,6 +296,7 @@ class MolGraph:
         self.a2b = []  # mapping from atom index to incoming bond indices
         self.b2a = []  # mapping from bond index to the index of the atom the bond is coming from
         self.b2revb = []  # mapping from bond index to the index of the reverse bond
+        self.additional_ffn_inputs = additional_ffn_inputs
         self.overwrite_default_atom_features = overwrite_default_atom_features
         self.overwrite_default_bond_features = overwrite_default_bond_features
 
@@ -435,6 +439,7 @@ class BatchMolGraph:
     * :code:`a_scope`: A list of tuples indicating the start and end atom indices for each molecule.
     * :code:`b_scope`: A list of tuples indicating the start and end bond indices for each molecule.
     * :code:`max_num_bonds`: The maximum number of bonds neighboring an atom in this batch.
+    * :code:`additional_ffn_inputs`: Additional inputs for the fnn, such as dH_rxn or QM descriptors
     * :code:`b2b`: (Optional) A mapping from a bond index to incoming bond indices.
     * :code:`a2a`: (Optional): A mapping from an atom index to neighboring atom indices.
     """
@@ -461,9 +466,13 @@ class BatchMolGraph:
         a2b = [[]]  # mapping from atom index to incoming bond indices
         b2a = [0]  # mapping from bond index to the index of the atom the bond is coming from
         b2revb = [0]  # mapping from bond index to the index of the reverse bond
+        additional_ffn_inputs = []
         for mol_graph in mol_graphs:
             f_atoms.extend(mol_graph.f_atoms)
             f_bonds.extend(mol_graph.f_bonds)
+
+            if mol_graph.additional_ffn_inputs is not None:
+                additional_ffn_inputs.append(mol_graph.additional_ffn_inputs)
 
             for a in range(mol_graph.n_atoms):
                 a2b.append([b + self.n_bonds for b in mol_graph.a2b[a]])
@@ -487,6 +496,7 @@ class BatchMolGraph:
         self.b2revb = torch.LongTensor(b2revb)
         self.b2b = None  # try to avoid computing b2b b/c O(n_atoms^3)
         self.a2a = None  # only needed if using atom messages
+        self.additional_ffn_inputs = torch.tensor(additional_ffn_inputs, dtype=float, requires_grad=True)
 
     def get_components(self, atom_messages: bool = False) -> Tuple[torch.FloatTensor, torch.FloatTensor,
                                                                    torch.LongTensor, torch.LongTensor, torch.LongTensor,
@@ -503,11 +513,13 @@ class BatchMolGraph:
         * :code:`b2revb`
         * :code:`a_scope`
         * :code:`b_scope`
+        * :code:`additional_ffn_inputs`
 
         :param atom_messages: Whether to use atom messages instead of bond messages. This changes the bond feature
                               vector to contain only bond features rather than both atom and bond features.
         :return: A tuple containing PyTorch tensors with the atom features, bond features, graph structure,
-                 and scope of the atoms and bonds (i.e., the indices of the molecules they belong to).
+                 scope of the atoms and bonds (i.e., the indices of the molecules they belong to), and any additional
+                 features to be concatenated with the learned features passed to the ffn before the readout phase.
         """
         if atom_messages:
             f_bonds = self.f_bonds[:, -get_bond_fdim(atom_messages=atom_messages,
@@ -516,7 +528,7 @@ class BatchMolGraph:
         else:
             f_bonds = self.f_bonds
 
-        return self.f_atoms, f_bonds, self.a2b, self.b2a, self.b2revb, self.a_scope, self.b_scope
+        return self.f_atoms, f_bonds, self.a2b, self.b2a, self.b2revb, self.a_scope, self.b_scope, self.additional_ffn_inputs
 
     def get_b2b(self) -> torch.LongTensor:
         """
@@ -551,6 +563,7 @@ class BatchMolGraph:
 def mol2graph(mols: Union[List[str], List[Chem.Mol], List[Tuple[Chem.Mol, Chem.Mol]]],
               atom_features_batch: List[np.array] = (None,),
               bond_features_batch: List[np.array] = (None,),
+              additional_ffn_inputs: List[np.array] = (None,),
               overwrite_default_atom_features: bool = False,
               overwrite_default_bond_features: bool = False
               ) -> BatchMolGraph:
@@ -560,11 +573,12 @@ def mol2graph(mols: Union[List[str], List[Chem.Mol], List[Tuple[Chem.Mol, Chem.M
     :param mols: A list of SMILES or a list of RDKit molecules.
     :param atom_features_batch: A list of 2D numpy array containing additional atom features to featurize the molecule
     :param bond_features_batch: A list of 2D numpy array containing additional bond features to featurize the molecule
+    :param additional_ffn_inputs: Additional inputs for the fnn, such as dH_rxn or QM descriptors
     :param overwrite_default_atom_features: Boolean to overwrite default atom descriptors by atom_descriptors instead of concatenating
     :param overwrite_default_bond_features: Boolean to overwrite default bond descriptors by bond_descriptors instead of concatenating
     :return: A :class:`BatchMolGraph` containing the combined molecular graph for the molecules.
     """
-    return BatchMolGraph([MolGraph(mol, af, bf,
+    return BatchMolGraph([MolGraph(mol, af, bf, additional_ffn_inputs,
                                    overwrite_default_atom_features=overwrite_default_atom_features,
                                    overwrite_default_bond_features=overwrite_default_bond_features)
                           for mol, af, bf

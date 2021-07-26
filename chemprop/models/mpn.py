@@ -41,7 +41,8 @@ class MPNEncoder(nn.Module):
         self.act_func = get_activation_function(args.activation)
 
         # Cached zeros
-        self.cached_zero_vector = nn.Parameter(torch.zeros(self.hidden_size), requires_grad=False)
+        num_additional_inputs = len(args.additional_ffn_inputs_columns) if args.additional_ffn_inputs_columns is not None else 0
+        self.cached_zero_vector = nn.Parameter(torch.zeros(self.hidden_size + num_additional_inputs), requires_grad=False)
 
         # Input
         input_dim = self.atom_fdim if self.atom_messages else self.bond_fdim
@@ -78,8 +79,8 @@ class MPNEncoder(nn.Module):
             atom_descriptors_batch = [np.zeros([1, atom_descriptors_batch[0].shape[1]])] + atom_descriptors_batch   # padding the first with 0 to match the atom_hiddens
             atom_descriptors_batch = torch.from_numpy(np.concatenate(atom_descriptors_batch, axis=0)).float().to(self.device)
 
-        f_atoms, f_bonds, a2b, b2a, b2revb, a_scope, b_scope = mol_graph.get_components(atom_messages=self.atom_messages)
-        f_atoms, f_bonds, a2b, b2a, b2revb = f_atoms.to(self.device), f_bonds.to(self.device), a2b.to(self.device), b2a.to(self.device), b2revb.to(self.device)
+        f_atoms, f_bonds, a2b, b2a, b2revb, a_scope, b_scope, additional_ffn_inputs = mol_graph.get_components(atom_messages=self.atom_messages)
+        f_atoms, f_bonds, a2b, b2a, b2revb, additional_ffn_inputs = f_atoms.to(self.device), f_bonds.to(self.device), a2b.to(self.device), b2a.to(self.device), b2revb.to(self.device), additional_ffn_inputs.to(self.device)
 
         if self.atom_messages:
             a2a = mol_graph.get_a2a().to(self.device)

@@ -171,6 +171,7 @@ def filter_invalid_smiles(data: MoleculeDataset) -> MoleculeDataset:
 def get_data(path: str,
              smiles_columns: Union[str, List[str]] = None,
              target_columns: List[str] = None,
+             additional_ffn_inputs_columns: List[str] = None,
              ignore_columns: List[str] = None,
              skip_invalid_smiles: bool = True,
              args: Union[TrainArgs, PredictArgs] = None,
@@ -191,6 +192,8 @@ def get_data(path: str,
                            By default, uses the first :code:`number_of_molecules` columns.
     :param target_columns: Name of the columns containing target values. By default, uses all columns
                            except the :code:`smiles_column` and the :code:`ignore_columns`.
+    :param additional_ffn_inputs_columns: names of the columns containing additional inputs for the fnn, such as
+                                          dh_rxn or QM descriptors
     :param ignore_columns: Name of the columns to ignore when :code:`target_columns` is not provided.
     :param skip_invalid_smiles: Whether to skip and filter out invalid smiles using :func:`filter_invalid_smiles`.
     :param args: Arguments, either :class:`~chemprop.args.TrainArgs` or :class:`~chemprop.args.PredictArgs`.
@@ -215,6 +218,8 @@ def get_data(path: str,
         # Prefer explicit function arguments but default to args if not provided
         smiles_columns = smiles_columns if smiles_columns is not None else args.smiles_columns
         target_columns = target_columns if target_columns is not None else args.target_columns
+        additional_ffn_inputs_columns = additional_ffn_inputs_columns if additional_ffn_inputs_columns is not None \
+            else args.additional_ffn_inputs_columns
         ignore_columns = ignore_columns if ignore_columns is not None else args.ignore_columns
         data_weights_path = data_weights_path if data_weights_path is not None else args.data_weights_path
         features_path = features_path if features_path is not None else args.features_path
@@ -258,11 +263,11 @@ def get_data(path: str,
                 ignore_columns=ignore_columns,
             )
 
-        all_smiles, all_targets, all_rows, all_features, all_weights = [], [], [], [], []
+        all_smiles, all_targets, all_rows, all_features, all_additional_ffn_inputs, all_weights = [], [], [], [], [], []
         for i, row in enumerate(tqdm(reader)):
             smiles = [row[c] for c in smiles_columns]
 
-            targets = [float(row[column]) if row[column] != '' else None for column in target_columns]
+            targets = [float(row[c]) if row[c] != '' else None for c in target_columns]
 
             # Check whether all targets are None and skip if so
             if skip_none_targets and all(x is None for x in targets):
@@ -270,6 +275,9 @@ def get_data(path: str,
 
             all_smiles.append(smiles)
             all_targets.append(targets)
+
+            if additional_ffn_inputs_columns is not None:
+                all_additional_ffn_inputs.append([float(row[c]) if row[c] != '' else None for c in additional_ffn_inputs_columns])
 
             if features_data is not None:
                 all_features.append(features_data[i])
@@ -311,6 +319,7 @@ def get_data(path: str,
                 data_weight=all_weights[i] if data_weights is not None else 1.,
                 features_generator=features_generator,
                 features=all_features[i] if features_data is not None else None,
+                additional_ffn_inputs=all_additional_ffn_inputs[i] if len(all_additional_ffn_inputs) else None,
                 atom_features=atom_features[i] if atom_features is not None else None,
                 atom_descriptors=atom_descriptors[i] if atom_descriptors is not None else None,
                 bond_features=bond_features[i] if bond_features is not None else None,

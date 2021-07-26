@@ -61,6 +61,7 @@ class MoleculeDatapoint:
                  data_weight: float = 1,
                  features: np.ndarray = None,
                  features_generator: List[str] = None,
+                 additional_ffn_inputs: np.ndarray = None,
                  atom_features: np.ndarray = None,
                  atom_descriptors: np.ndarray = None,
                  bond_features: np.ndarray = None,
@@ -73,6 +74,8 @@ class MoleculeDatapoint:
         :param data_weight: Weighting of the datapoint for the loss function.
         :param features: A numpy array containing additional features (e.g., Morgan fingerprint).
         :param features_generator: A list of features generators to use.
+        :param additional_ffn_inputs_columns: names of the columns containing additional inputs for the fnn, such as
+                                          dh_rxn or QM descriptors
         :param atom_descriptors: A numpy array containing additional atom descriptors to featurize the molecule
         :param bond_features: A numpy array containing additional bond features to featurize the molecule
         :param overwrite_default_atom_features: Boolean to overwrite default atom features by atom_features
@@ -88,6 +91,7 @@ class MoleculeDatapoint:
         self.data_weight = data_weight
         self.features = features
         self.features_generator = features_generator
+        self.additional_ffn_inputs = additional_ffn_inputs
         self.atom_descriptors = atom_descriptors
         self.atom_features = atom_features
         self.bond_features = bond_features
@@ -298,6 +302,7 @@ class MoleculeDataset(Dataset):
                                                       'per input (i.e., number_of_molecules = 1).')
 
                         mol_graph = MolGraph(m, d.atom_features, d.bond_features,
+                                             additional_ffn_inputs=d.additional_ffn_inputs,
                                              overwrite_default_atom_features=d.overwrite_default_atom_features,
                                              overwrite_default_bond_features=d.overwrite_default_bond_features)
                         if cache_graph():

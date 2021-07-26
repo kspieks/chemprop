@@ -6,12 +6,11 @@ import numpy as np
 from chemprop.rdkit import make_mol
 
 # Atom feature sizes
-MAX_ATOMIC_NUM = 100
+ATOMIC_SYMBOLS = ['H', 'C', 'N', 'O']
 ATOM_FEATURES = {
-    'atomic_num': list(range(MAX_ATOMIC_NUM)),
+    'atomic_symbol': ATOMIC_SYMBOLS,
     'degree': [0, 1, 2, 3, 4, 5],
     'formal_charge': [-1, -2, 1, 2, 0],
-    'chiral_tag': [0, 1, 2, 3],
     'num_Hs': [0, 1, 2, 3, 4],
     'hybridization': [
         Chem.rdchem.HybridizationType.SP,
@@ -28,11 +27,6 @@ THREE_D_DISTANCE_MAX = 20
 THREE_D_DISTANCE_STEP = 1
 THREE_D_DISTANCE_BINS = list(range(0, THREE_D_DISTANCE_MAX + 1, THREE_D_DISTANCE_STEP))
 
-# len(choices) + 1 to include room for uncommon values; + 2 at end for IsAromatic and mass
-ATOM_FDIM = sum(len(choices) + 1 for choices in ATOM_FEATURES.values()) + 2
-EXTRA_ATOM_FDIM = 0
-BOND_FDIM = 14
-EXTRA_BOND_FDIM = 0
 REACTION_MODE = None
 EXPLICIT_H = False
 REACTION = False
@@ -73,7 +67,7 @@ def set_reaction(reaction: bool, mode: str) -> None:
         global EXTRA_BOND_FDIM
         global EXTRA_ATOM_FDIM
     
-        EXTRA_ATOM_FDIM = ATOM_FDIM - MAX_ATOMIC_NUM -1
+        EXTRA_ATOM_FDIM = ATOM_FDIM - len(ATOMIC_SYMBOLS) - 1
         EXTRA_BOND_FDIM = BOND_FDIM
         REACTION_MODE = mode        
 
@@ -150,16 +144,23 @@ def atom_features(atom: Chem.rdchem.Atom, functional_groups: List[int] = None) -
     if atom is None:
         features = [0] * ATOM_FDIM
     else:
-        features = onek_encoding_unk(atom.GetAtomicNum() - 1, ATOM_FEATURES['atomic_num']) + \
+        features = onek_encoding_unk(atom.GetSymbol(), ATOM_FEATURES['atomic_symbol']) + \
             onek_encoding_unk(atom.GetTotalDegree(), ATOM_FEATURES['degree']) + \
             onek_encoding_unk(atom.GetFormalCharge(), ATOM_FEATURES['formal_charge']) + \
-            onek_encoding_unk(int(atom.GetChiralTag()), ATOM_FEATURES['chiral_tag']) + \
             onek_encoding_unk(int(atom.GetTotalNumHs()), ATOM_FEATURES['num_Hs']) + \
             onek_encoding_unk(int(atom.GetHybridization()), ATOM_FEATURES['hybridization']) + \
             [1 if atom.GetIsAromatic() else 0] + \
             [atom.GetMass() * 0.01]  # scaled to about the same range as other features
         if functional_groups is not None:
             features += functional_groups
+
+        features += [atom.IsInRingSize(3),
+                     atom.IsInRingSize(4),
+                     atom.IsInRingSize(5),
+                     atom.IsInRingSize(6),
+                     atom.IsInRingSize(7),
+                     ]
+
     return features
 
 
@@ -181,10 +182,35 @@ def bond_features(bond: Chem.rdchem.Bond) -> List[Union[bool, int, float]]:
             bt == Chem.rdchem.BondType.TRIPLE,
             bt == Chem.rdchem.BondType.AROMATIC,
             (bond.GetIsConjugated() if bt is not None else 0),
-            (bond.IsInRing() if bt is not None else 0)
+            (bond.IsInRingSize(3) if bt is not None else 0),
+            (bond.IsInRingSize(4) if bt is not None else 0),
+            (bond.IsInRingSize(5) if bt is not None else 0),
+            (bond.IsInRingSize(6) if bt is not None else 0),
+            (bond.IsInRingSize(7) if bt is not None else 0),
         ]
         fbond += onek_encoding_unk(int(bond.GetStereo()), list(range(6)))
     return fbond
+
+
+# set the atom feature sizes
+def set_atom_fdim() -> int:
+    """Automatically sets the dimensionality of atom features."""
+    global ATOM_FDIM
+    mol = Chem.MolFromSmiles('[H][H]')
+    atoms = [a for a in mol.GetAtoms()]
+    ATOM_FDIM = len(atom_features(atoms[0]))
+set_atom_fdim()
+EXTRA_ATOM_FDIM = 0
+
+# set the bond feature sizes
+def set_bond_fdim() -> int:
+    """Automatically sets the dimensionality of bond features."""
+    global BOND_FDIM
+    mol = Chem.MolFromSmiles('[H][H]')
+    bonds = [b for b in mol.GetBonds()]
+    BOND_FDIM = len(bond_features(bonds[0]))
+set_bond_fdim()
+EXTRA_BOND_FDIM = 0
 
 
 def map_reac_to_prod(mol_reac: Chem.Mol, mol_prod: Chem.Mol):
@@ -340,11 +366,11 @@ class MolGraph:
             if self.reaction_mode in ['reac_diff','prod_diff']:
                 f_atoms_diff = [list(map(lambda x, y: x - y, ii, jj)) for ii, jj in zip(f_atoms_prod, f_atoms_reac)]
             if self.reaction_mode == 'reac_prod':
-                self.f_atoms = [x+y[MAX_ATOMIC_NUM+1:] for x,y in zip(f_atoms_reac, f_atoms_prod)]
+                self.f_atoms = [x+y[len(ATOMIC_SYMBOLS)+1:] for x,y in zip(f_atoms_reac, f_atoms_prod)]
             elif self.reaction_mode == 'reac_diff':
-                self.f_atoms = [x+y[MAX_ATOMIC_NUM+1:] for x,y in zip(f_atoms_reac, f_atoms_diff)]
+                self.f_atoms = [x+y[len(ATOMIC_SYMBOLS)+1:] for x,y in zip(f_atoms_reac, f_atoms_diff)]
             elif self.reaction_mode == 'prod_diff':
-                self.f_atoms = [x+y[MAX_ATOMIC_NUM+1:] for x,y in zip(f_atoms_prod, f_atoms_diff)]
+                self.f_atoms = [x+y[len(ATOMIC_SYMBOLS)+1:] for x,y in zip(f_atoms_prod, f_atoms_diff)]
             self.n_atoms = len(self.f_atoms)
             n_atoms_reac = mol_reac.GetNumAtoms()
 

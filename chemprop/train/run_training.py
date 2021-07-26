@@ -276,9 +276,10 @@ def run_training(args: TrainArgs,
 
             # Save model checkpoint if improved validation score
             avg_val_score = np.nanmean(val_scores[args.metric])
-            if args.minimize_score and avg_val_score < best_score or \
-                    not args.minimize_score and avg_val_score > best_score:
-                best_score, best_epoch = avg_val_score, epoch
+            val_score = val_scores[args.metric][0] if args.validate_on_first_target else avg_val_score
+            if args.minimize_score and val_score < best_score or \
+                    not args.minimize_score and val_score > best_score:
+                best_score, best_epoch = val_score, epoch
                 save_checkpoint(os.path.join(save_dir, MODEL_FILE_NAME), model, scaler, features_scaler,
                                 atom_descriptor_scaler, bond_feature_scaler, args)
 

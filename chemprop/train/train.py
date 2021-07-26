@@ -41,6 +41,7 @@ def train(model: MoleculeModel,
 
     model.train()
     loss_sum = iter_count = 0
+    loss_total = 0
 
     for batch in tqdm(data_loader, total=len(data_loader), leave=False):
         # Prepare batch
@@ -76,6 +77,7 @@ def train(model: MoleculeModel,
         loss = loss.sum() / mask.sum()
 
         loss_sum += loss.item()
+        loss_total += loss.item()
         iter_count += 1
 
         loss.backward()
@@ -105,5 +107,7 @@ def train(model: MoleculeModel,
                 writer.add_scalar('gradient_norm', gnorm, n_iter)
                 for i, lr in enumerate(lrs):
                     writer.add_scalar(f'learning_rate_{i}', lr, n_iter)
+
+    debug(f'Training {args.metric} = {loss_total:.6f}')
 
     return n_iter

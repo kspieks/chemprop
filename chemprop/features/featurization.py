@@ -11,6 +11,7 @@ ATOM_FEATURES = {
     'atomic_symbol': ATOMIC_SYMBOLS,
     'degree': [0, 1, 2, 3, 4, 5],
     'formal_charge': [-1, -2, 1, 2, 0],
+    'chiral_tag': [0, 1, 2, 3],
     'num_Hs': [0, 1, 2, 3, 4],
     'hybridization': [
         Chem.rdchem.HybridizationType.SP,
@@ -147,19 +148,13 @@ def atom_features(atom: Chem.rdchem.Atom, functional_groups: List[int] = None) -
         features = onek_encoding_unk(atom.GetSymbol(), ATOM_FEATURES['atomic_symbol']) + \
             onek_encoding_unk(atom.GetTotalDegree(), ATOM_FEATURES['degree']) + \
             onek_encoding_unk(atom.GetFormalCharge(), ATOM_FEATURES['formal_charge']) + \
+            onek_encoding_unk(int(atom.GetChiralTag()), ATOM_FEATURES['chiral_tag']) + \
             onek_encoding_unk(int(atom.GetTotalNumHs()), ATOM_FEATURES['num_Hs']) + \
             onek_encoding_unk(int(atom.GetHybridization()), ATOM_FEATURES['hybridization']) + \
             [1 if atom.GetIsAromatic() else 0] + \
             [atom.GetMass() * 0.01]  # scaled to about the same range as other features
         if functional_groups is not None:
             features += functional_groups
-
-        features += [atom.IsInRingSize(3),
-                     atom.IsInRingSize(4),
-                     atom.IsInRingSize(5),
-                     atom.IsInRingSize(6),
-                     atom.IsInRingSize(7),
-                     ]
 
     return features
 
@@ -182,11 +177,7 @@ def bond_features(bond: Chem.rdchem.Bond) -> List[Union[bool, int, float]]:
             bt == Chem.rdchem.BondType.TRIPLE,
             bt == Chem.rdchem.BondType.AROMATIC,
             (bond.GetIsConjugated() if bt is not None else 0),
-            (bond.IsInRingSize(3) if bt is not None else 0),
-            (bond.IsInRingSize(4) if bt is not None else 0),
-            (bond.IsInRingSize(5) if bt is not None else 0),
-            (bond.IsInRingSize(6) if bt is not None else 0),
-            (bond.IsInRingSize(7) if bt is not None else 0),
+            (bond.IsInRing() if bt is not None else 0),
         ]
         fbond += onek_encoding_unk(int(bond.GetStereo()), list(range(6)))
     return fbond

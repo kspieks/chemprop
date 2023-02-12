@@ -317,6 +317,8 @@ class TrainArgs(CommonArgs):
     """The number of batches between each logging of the training loss."""
     show_individual_scores: bool = False
     """Show all scores for individual targets, not just average, at the end."""
+    validate_on_first_target: bool = False
+    """Save model if validation score on first target improves even if overall score drops."""
     cache_cutoff: float = 10000
     """
     Maximum number of molecules in dataset to allow caching.

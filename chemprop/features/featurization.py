@@ -15,13 +15,14 @@ class Featurization_parameters:
     def __init__(self) -> None:
 
         # Atom feature sizes
-        self.MAX_ATOMIC_NUM = 100
+        self.ATOMIC_SYMBOLS = ['H', 'C', 'N', 'O']
         self.ATOM_FEATURES = {
-            'atomic_num': list(range(self.MAX_ATOMIC_NUM)),
+            'atomic_symbol': self.ATOMIC_SYMBOLS,
             'degree': [0, 1, 2, 3, 4, 5],
             'formal_charge': [-1, -2, 1, 2, 0],
             'chiral_tag': [0, 1, 2, 3],
             'num_Hs': [0, 1, 2, 3, 4],
+            'num_radical_electrons': [0, 1, 2],
             'hybridization': [
                 Chem.rdchem.HybridizationType.SP,
                 Chem.rdchem.HybridizationType.SP2,
@@ -37,19 +38,15 @@ class Featurization_parameters:
         self.THREE_D_DISTANCE_STEP = 1
         self.THREE_D_DISTANCE_BINS = list(range(0, self.THREE_D_DISTANCE_MAX + 1, self.THREE_D_DISTANCE_STEP))
 
-        # len(choices) + 1 to include room for uncommon values; + 2 at end for IsAromatic and mass
-        self.ATOM_FDIM = sum(len(choices) + 1 for choices in self.ATOM_FEATURES.values()) + 2
+        self.ATOM_FDIM = 0
         self.EXTRA_ATOM_FDIM = 0
-        self.BOND_FDIM = 14
+        self.BOND_FDIM = 0
         self.EXTRA_BOND_FDIM = 0
         self.REACTION_MODE = None
         self.EXPLICIT_H = False
         self.REACTION = False
         self.ADDING_H = False
         self.KEEP_ATOM_MAP = False
-
-# Create a global parameter object for reference throughout this module
-PARAMS = Featurization_parameters()
 
 
 def reset_featurization_parameters(logger: logging.Logger = None) -> None:
@@ -63,6 +60,8 @@ def reset_featurization_parameters(logger: logging.Logger = None) -> None:
     debug('Setting molecule featurization parameters to default.')
     global PARAMS
     PARAMS = Featurization_parameters()
+    set_atom_fdim(PARAMS)
+    set_bond_fdim(PARAMS)
 
 
 def get_atom_fdim(overwrite_default_atom: bool = False, is_reaction: bool = False) -> int:
@@ -113,7 +112,7 @@ def set_reaction(reaction: bool, mode: str) -> None:
     """
     PARAMS.REACTION = reaction
     if reaction:
-        PARAMS.EXTRA_ATOM_FDIM = PARAMS.ATOM_FDIM - PARAMS.MAX_ATOMIC_NUM - 1
+        PARAMS.EXTRA_ATOM_FDIM = PARAMS.ATOM_FDIM - len(PARAMS.ATOMIC_SYMBOLS) - 1
         PARAMS.EXTRA_BOND_FDIM = PARAMS.BOND_FDIM
         PARAMS.REACTION_MODE = mode
         
@@ -213,7 +212,7 @@ def atom_features(atom: Chem.rdchem.Atom, functional_groups: List[int] = None) -
     if atom is None:
         features = [0] * PARAMS.ATOM_FDIM
     else:
-        features = onek_encoding_unk(atom.GetAtomicNum() - 1, PARAMS.ATOM_FEATURES['atomic_num']) + \
+        features = onek_encoding_unk(atom.GetSymbol(), PARAMS.ATOM_FEATURES['atomic_symbol']) + \
             onek_encoding_unk(atom.GetTotalDegree(), PARAMS.ATOM_FEATURES['degree']) + \
             onek_encoding_unk(atom.GetFormalCharge(), PARAMS.ATOM_FEATURES['formal_charge']) + \
             onek_encoding_unk(int(atom.GetChiralTag()), PARAMS.ATOM_FEATURES['chiral_tag']) + \
@@ -223,6 +222,15 @@ def atom_features(atom: Chem.rdchem.Atom, functional_groups: List[int] = None) -
             [atom.GetMass() * 0.01]  # scaled to about the same range as other features
         if functional_groups is not None:
             features += functional_groups
+        
+        features += [atom.IsInRingSize(3),
+                     atom.IsInRingSize(4),
+                     atom.IsInRingSize(5),
+                     atom.IsInRingSize(6),
+                     atom.IsInRingSize(7),
+                     atom.IsInRingSize(8),
+                     ]
+
     return features
 
 
@@ -237,7 +245,7 @@ def atom_features_zeros(atom: Chem.rdchem.Atom) -> List[Union[bool, int, float]]
         features = [0] * PARAMS.ATOM_FDIM
     else:
         features = onek_encoding_unk(atom.GetAtomicNum() - 1, PARAMS.ATOM_FEATURES['atomic_num']) + \
-            [0] * (PARAMS.ATOM_FDIM - PARAMS.MAX_ATOMIC_NUM - 1) #set other features to zero
+            [0] * (PARAMS.ATOM_FDIM - len(PARAMS.ATOMIC_SYMBOLS) - 1)  # set other features to zero
     return features
 
 
@@ -259,7 +267,13 @@ def bond_features(bond: Chem.rdchem.Bond) -> List[Union[bool, int, float]]:
             bt == Chem.rdchem.BondType.TRIPLE,
             bt == Chem.rdchem.BondType.AROMATIC,
             (bond.GetIsConjugated() if bt is not None else 0),
-            (bond.IsInRing() if bt is not None else 0)
+            (bond.IsInRing() if bt is not None else 0),
+            (bond.IsInRingSize(3) if bt is not None else 0),
+            (bond.IsInRingSize(4) if bt is not None else 0),
+            (bond.IsInRingSize(5) if bt is not None else 0),
+            (bond.IsInRingSize(6) if bt is not None else 0),
+            (bond.IsInRingSize(7) if bt is not None else 0),
+            (bond.IsInRingSize(8) if bt is not None else 0),
         ]
         fbond += onek_encoding_unk(int(bond.GetStereo()), list(range(6)))
     return fbond
@@ -296,6 +310,26 @@ def map_reac_to_prod(mol_reac: Chem.Mol, mol_prod: Chem.Mol):
         else:
             only_reac_ids.append(atom.GetIdx())
     return reac_id_to_prod_id, only_prod_ids, only_reac_ids
+
+
+# Create a global parameter object for reference throughout this module
+PARAMS = Featurization_parameters()
+
+# set the atom feature sizes
+def set_atom_fdim(PARAMS) -> int:
+    """Automatically sets the dimensionality of atom features."""
+    mol = Chem.MolFromSmiles('[H][H]')
+    atoms = [a for a in mol.GetAtoms()]
+    PARAMS.ATOM_FDIM = len(atom_features(atoms[0]))
+set_atom_fdim(PARAMS)
+
+# set the bond feature sizes
+def set_bond_fdim(PARAMS) -> int:
+    """Automatically sets the dimensionality of bond features."""
+    mol = Chem.MolFromSmiles('[H][H]')
+    bonds = [b for b in mol.GetBonds()]
+    PARAMS.BOND_FDIM = len(bond_features(bonds[0]))
+set_bond_fdim(PARAMS)
 
 
 class MolGraph:
@@ -443,11 +477,11 @@ class MolGraph:
             if self.reaction_mode in ['reac_diff', 'prod_diff', 'reac_diff_balance', 'prod_diff_balance']:
                 f_atoms_diff = [list(map(lambda x, y: x - y, ii, jj)) for ii, jj in zip(f_atoms_prod, f_atoms_reac)]
             if self.reaction_mode in ['reac_prod', 'reac_prod_balance']:
-                self.f_atoms = [x+y[PARAMS.MAX_ATOMIC_NUM+1:] for x,y in zip(f_atoms_reac, f_atoms_prod)]
+                self.f_atoms = [x+y[len(PARAMS.ATOMIC_SYMBOLS)+1:] for x,y in zip(f_atoms_reac, f_atoms_prod)]
             elif self.reaction_mode in ['reac_diff', 'reac_diff_balance']:
-                self.f_atoms = [x+y[PARAMS.MAX_ATOMIC_NUM+1:] for x,y in zip(f_atoms_reac, f_atoms_diff)]
+                self.f_atoms = [x+y[len(PARAMS.ATOMIC_SYMBOLS)+1:] for x,y in zip(f_atoms_reac, f_atoms_diff)]
             elif self.reaction_mode in ['prod_diff', 'prod_diff_balance']:
-                self.f_atoms = [x+y[PARAMS.MAX_ATOMIC_NUM+1:] for x,y in zip(f_atoms_prod, f_atoms_diff)]
+                self.f_atoms = [x+y[len(PARAMS.ATOMIC_SYMBOLS)+1:] for x,y in zip(f_atoms_prod, f_atoms_diff)]
             self.n_atoms = len(self.f_atoms)
             n_atoms_reac = mol_reac.GetNumAtoms()
 

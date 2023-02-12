@@ -23,7 +23,7 @@ from chemprop.data import get_class_sizes, get_data, MoleculeDataLoader, Molecul
 from chemprop.models import MoleculeModel
 from chemprop.nn_utils import param_count, param_count_all
 from chemprop.utils import build_optimizer, build_lr_scheduler, load_checkpoint, makedirs, \
-    save_checkpoint, save_smiles_splits, load_frzn_model, multitask_mean
+    save_checkpoint, save_smiles_splits, load_frzn_model, multitask_mean, plot_train_val_loss, plot_lr, plot_gnorm_pnorm
 
 
 def run_training(args: TrainArgs,
@@ -283,9 +283,14 @@ def run_training(args: TrainArgs,
 
         # Optimizers
         optimizer = build_optimizer(model, args)
+        info(f'Optimizer parameters are:\n{optimizer}\n')
 
         # Learning rate schedulers
         scheduler = build_lr_scheduler(optimizer, args)
+        info(f'Scheduler state dict is:')
+        for key, value in scheduler.state_dict().items():
+            info(f'{key}: {value}')
+        info('')
 
         # Run training
         best_score = float('inf') if args.minimize_score else -float('inf')
@@ -435,5 +440,11 @@ def run_training(args: TrainArgs,
                 test_preds_dataframe[task_name] = [pred[i] for pred in avg_test_preds]
 
         test_preds_dataframe.to_csv(os.path.join(args.save_dir, 'test_preds.csv'), index=False)
+
+    # finally, make plots to visualize training
+    logfile = os.path.join(os.path.dirname(args.save_dir), 'verbose.log')
+    plot_train_val_loss(logfile)
+    plot_lr(logfile)
+    plot_gnorm_pnorm(logfile)
 
     return ensemble_scores

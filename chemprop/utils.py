@@ -10,6 +10,8 @@ from time import time
 from typing import Any, Callable, List, Tuple
 import collections
 
+import matplotlib.pyplot as plt
+import numpy as np
 import torch
 import torch.nn as nn
 import numpy as np
@@ -17,6 +19,12 @@ from torch.optim import Adam, Optimizer
 from torch.optim.lr_scheduler import _LRScheduler
 from tqdm import tqdm
 from scipy.stats.mstats import gmean
+import seaborn as sns
+sns.set('poster', rc={"xtick.bottom": True, "ytick.left": True,
+                      'axes.edgecolor': '.2',
+                      "font.weight": 'bold',
+                      "axes.titleweight": 'bold',
+                      'axes.labelweight': 'bold'})
 
 from chemprop.args import PredictArgs, TrainArgs, FingerprintArgs
 from chemprop.data import StandardScaler, AtomBondScaler, MoleculeDataset, preprocess_smiles_columns, get_task_names
@@ -873,3 +881,82 @@ def multitask_mean(
                 This metric must be added to the appropriate list in the multitask_mean\
                 function in `chemprop/utils.py` in order to be used."
         )
+
+def plot_train_val_loss(log_file):
+    """
+    Plots the training and validation loss by parsing the log file.
+    Args:
+        log_file (str): The path to the log file created during training.
+    """
+    val_rmse, train_rmse = [], []
+    with open(log_file) as f:
+        lines = f.readlines()
+        for line in reversed(lines):
+            if 'Validation rmse' in line:
+                val_rmse.append(float(line.split(' ')[-1].rstrip()))
+            elif 'Training rmse' in line:
+                train_rmse.append(float(line.split(' ')[-1].rstrip()))
+            elif 'Number of parameters' in line:
+                break
+
+    fig, ax = plt.subplots(1, 1, figsize=(12, 8))
+    ax.plot(np.arange(len(train_rmse))[::-1], train_rmse, label='Train RMSE')
+    ax.plot(np.arange(len(val_rmse))[::-1], val_rmse, label='Val RMSE')
+    ax.set_xlabel('Epochs')
+    ax.set_ylabel('Loss')
+    ax.legend()
+    fig.savefig(os.path.join(os.path.dirname(log_file), 'train_val_rmse.pdf'), bbox_inches='tight')
+
+
+def plot_lr(log_file):
+    """
+    Plots the learning rate by parsing the log file.
+    Args:
+        log_file (str): The path to the log file created during training.
+    """
+    lr = []
+    with open(log_file) as f:
+        lines = f.readlines()
+        for line in reversed(lines):
+            if 'lr_0' in line:
+                lr.append(float(line.split()[-1].rstrip()))
+            if 'steps_per_epoch:' in line:
+                steps_per_epoch = line.split()[-1].rstrip()
+
+    fig, ax = plt.subplots(1, 1, figsize=(12, 8))
+    ax.plot(np.arange(len(lr))[::-1], lr)
+    ax.set_xlabel(f'Steps (steps per epoch: {steps_per_epoch})')
+    ax.set_ylabel('Learning Rate')
+    ax.set_yscale('log')
+    fig.savefig(os.path.join(os.path.dirname(log_file), 'learning_rate.pdf'), bbox_inches='tight')
+
+
+def plot_gnorm_pnorm(log_file):
+    """
+    Plots the gradient norm and parameter norm by parsing the log file.
+    Args:
+        log_file (str): The path to the log file created during training.
+    """
+    gnorm, pnorm = [], []
+    with open(log_file) as f:
+        lines = f.readlines()
+        for line in reversed(lines):
+            if 'PNorm' in line:
+                pnorm.append(float(line.split()[5].rstrip(',')))
+                gnorm.append(float(line.split()[8].rstrip(',')))
+            if 'steps_per_epoch:' in line:
+                steps_per_epoch = line.split()[-1].rstrip()
+
+    fig, ax = plt.subplots(1, 1, figsize=(12, 8))
+    ax.plot(np.arange(len(pnorm))[::-1], pnorm)
+    ax.set_xlabel(f'Steps (steps per epoch: {steps_per_epoch})')
+    ax.set_ylabel('Parameter Norm')
+    fig.savefig(os.path.join(os.path.dirname(log_file), 'pnorm.pdf'), bbox_inches='tight')
+
+    fig, ax = plt.subplots(1, 1, figsize=(12, 8))
+    ax.plot(np.arange(len(gnorm))[::-1], gnorm)
+    ax.set_xlabel(f'Steps (steps per epoch: {steps_per_epoch})')
+    ax.set_ylabel('Gradient Norm')
+    ax.set_yscale('log')
+    fig.savefig(os.path.join(os.path.dirname(log_file), 'gnorm.pdf'), bbox_inches='tight')
+

@@ -49,6 +49,7 @@ def train(
         loss_sum, iter_count = [0]*(len(args.atom_targets) + len(args.bond_targets)), 0
     else:
         loss_sum = iter_count = 0
+        loss_total = 0
 
     for batch in tqdm(data_loader, total=len(data_loader), leave=False):
         # Prepare batch
@@ -214,6 +215,7 @@ def train(
                 loss = loss.sum() / masks.sum()
 
             loss_sum += loss.item()
+            loss_total += loss.item()
             iter_count += 1
 
             loss.backward()
@@ -247,5 +249,7 @@ def train(
                 writer.add_scalar("gradient_norm", gnorm, n_iter)
                 for i, lr in enumerate(lrs):
                     writer.add_scalar(f"learning_rate_{i}", lr, n_iter)
+        
+        debug(f'Training {args.metric} = {loss_total:.6f}')
 
     return n_iter

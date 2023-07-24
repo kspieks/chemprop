@@ -1,0 +1,1 @@
+This folder contains the weights from a D-MPNN model that was pre-trained to predict both the Ea and dH0 for a reaction in kcal/mol. The csv file contains the data used for pre-training, whose values are estimates from RMG.

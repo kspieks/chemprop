@@ -295,15 +295,23 @@ def load_frzn_model(
             and current_args.freeze_first_only
             and current_args.frzn_ffn_layers <= 0
         ):  # Only freeze first MPNN
-            encoder_param_names = [
+            loaded_encoder_param_names = [
                 "encoder.encoder.0.W_i.weight",
                 "encoder.encoder.0.W_h.weight",
                 "encoder.encoder.0.W_o.weight",
                 "encoder.encoder.0.W_o.bias",
             ]
-            for param_name in encoder_param_names:
+            model_encoder_param_names = [
+                "encoder.encoder.W_i.weight",
+                "encoder.encoder.W_h.weight",
+                "encoder.encoder.W_o.weight",
+                "encoder.encoder.W_o.bias",
+            ]
+            for loaded_param_name, model_param_name in zip(
+                loaded_encoder_param_names, model_encoder_param_names
+            ):
                 model_state_dict = overwrite_state_dict(
-                    param_name, param_name, loaded_state_dict, model_state_dict
+                    loaded_param_name, model_param_name, loaded_state_dict, model_state_dict
                 )
         if (
             current_args.checkpoint_frzn is not None

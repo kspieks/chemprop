@@ -85,7 +85,7 @@ class MoleculeModel(nn.Module):
 
         if args.checkpoint_frzn is not None:
             if args.freeze_first_only:  # Freeze only the first encoder
-                for param in list(self.encoder.encoder.children())[0].parameters():
+                for param in self.encoder.encoder.parameters():
                     param.requires_grad = False
             else:  # Freeze all encoders
                 for param in self.encoder.parameters():

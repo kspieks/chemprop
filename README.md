@@ -7,58 +7,65 @@
 
 This repository contains message passing neural networks for molecular property prediction as described in the paper [Analyzing Learned Molecular Representations for Property Prediction](https://pubs.acs.org/doi/abs/10.1021/acs.jcim.9b00237) and as used in the paper [A Deep Learning Approach to Antibiotic Discovery](https://www.cell.com/cell/fulltext/S0092-8674(20)30102-1) for molecules and [Machine Learning of Reaction Properties via Learned Representations of the Condensed Graph of Reaction](https://doi.org/10.1021/acs.jcim.1c00975) for reactions.
 
+
 **Documentation:** Full documentation of Chemprop is available at https://chemprop.readthedocs.io/en/latest/.
 
 **Website:** A web prediction interface with some trained Chemprop models is available at [chemprop.csail.mit.edu](http://chemprop.csail.mit.edu).
 
 **Tutorial:** These [slides](https://docs.google.com/presentation/d/14pbd9LTXzfPSJHyXYkfLxnK8Q80LhVnjImg8a3WqCRM/edit?usp=sharing) provide a Chemprop tutorial and highlight recent additions as of April 28th, 2020.
 
-## COVID-19 Update
+## Solvated Reaction Barrier Height
 
-Please see [aicures.mit.edu](https://aicures.mit.edu) and the associated [data GitHub repo](https://github.com/yangkevin2/coronavirus_data) for information about our recent efforts to use Chemprop to identify drug candidates for treating COVID-19.
+This specific branch **(solvated_barrier_prediction)** incorporated necessary changes and trained weights for models developed in the paper [Accurately Predicting Barrier Heights for Radical Reactions in Solution Using Deep Graph Networks](https://doi.org/10.1021/acs.jpca.4c04121). Model weights, data splits, and useful scripts for inference are located at `/paper_results`. Other supplementary data are accessible at [this Zenodo link](https://zenodo.org/records/11493786).
+
 
 ## Table of Contents
 
-- [Requirements](#requirements)
-- [Installation](#installation)
-  * [Option 1: Installing from PyPi](#option-1-installing-from-pypi)
-  * [Option 2: Installing from source](#option-2-installing-from-source)
-  * [Docker](#docker)
-- [Web Interface](#web-interface)
-- [Within Python](#within-python)
-- [Reproducibility](#reproducibility)
-- [Data](#data)
-- [Training](#training)
-  * [Train/Validation/Test Splits](#trainvalidationtest-splits)
-  * [Loss functions](#loss-functions)
-  * [Metrics](#metrics)
-  * [Cross validation and ensembling](#cross-validation-and-ensembling)
-  * [Aggregation](#aggregation)
-  * [Additional Features](#additional-features)
-    * [Custom Features](#molecule-level-custom-features)
-    * [RDKit 2D Features](#molecule-level-rdkit-2d-features)
-    * [Atomic Features](#atom-level-features)
-  * [Spectra](#spectra)
-  * [Reaction](#reaction)
-  * [Reaction in a solvent / Reaction and a molecule](#reaction-in-a-solvent--reaction-and-a-molecule)
-  * [Atomic and bond properties prediction](#atomic-and-bond-properties-prediction)
-  * [Pretraining](#pretraining)
-  * [Missing target values](#missing-target-values)
-  * [Weighted training by target and data](#weighted-training-by-target-and-data)
-  * [Caching](#caching)
-- [Predicting](#predicting)
-  * [Uncertainty Estimation](#uncertainty-estimation)
-  * [Uncertainty Calibration](#uncertainty-calibration)
-  * [Uncertainty Evaluation Metrics](#uncertainty-evaluation-metrics)
-- [Hyperparameter Optimization](#hyperparameter-optimization)
-  * [Choosing the Search Parameters](#choosing-the-search-parameters)
-  * [Checkpoints and Parallel Operation](#checkpoints-and-parallel-operation)
-  * [Random or Directed Search](#random-or-directed-search)
-  * [Manual Trials](#manual-trials)
-- [Encode Fingerprint Latent Representation](#encode-fingerprint-latent-representation)
-- [Interpreting Model Prediction](#interpreting)
-- [TensorBoard](#tensorboard)
-- [Results](#results)
+- [Molecular Property Prediction](#molecular-property-prediction)
+  - [Solvated Reaction Barrier Height](#solvated-reaction-barrier-height)
+  - [Table of Contents](#table-of-contents)
+  - [Requirements](#requirements)
+  - [Installation](#installation)
+    - [Option 1: Installing from PyPi](#option-1-installing-from-pypi)
+    - [Option 2: Installing from source](#option-2-installing-from-source)
+    - [Docker](#docker)
+  - [Web Interface](#web-interface)
+    - [Flask](#flask)
+    - [Gunicorn](#gunicorn)
+  - [Within Python](#within-python)
+  - [Data](#data)
+  - [Training](#training)
+    - [Train/Validation/Test Splits](#trainvalidationtest-splits)
+    - [Loss functions](#loss-functions)
+    - [Metrics](#metrics)
+    - [Cross validation and ensembling](#cross-validation-and-ensembling)
+    - [Aggregation](#aggregation)
+    - [Additional Features](#additional-features)
+      - [Molecule-Level Custom Features](#molecule-level-custom-features)
+      - [Molecule-Level RDKit 2D Features](#molecule-level-rdkit-2d-features)
+      - [Atom-Level Features](#atom-level-features)
+      - [Bond-Level Features](#bond-level-features)
+    - [Spectra](#spectra)
+    - [Reaction](#reaction)
+    - [Reaction in a solvent / Reaction and a molecule](#reaction-in-a-solvent--reaction-and-a-molecule)
+    - [Atomic and bond properties prediction](#atomic-and-bond-properties-prediction)
+    - [Pretraining](#pretraining)
+    - [Missing Target Values](#missing-target-values)
+    - [Weighted Training by Target and Data](#weighted-training-by-target-and-data)
+    - [Caching](#caching)
+  - [Predicting](#predicting)
+    - [Uncertainty Estimation](#uncertainty-estimation)
+    - [Uncertainty Calibration](#uncertainty-calibration)
+    - [Uncertainty Evaluation Metrics](#uncertainty-evaluation-metrics)
+  - [Hyperparameter Optimization](#hyperparameter-optimization)
+    - [Choosing the Search Parameters](#choosing-the-search-parameters)
+    - [Checkpoints and Parallel Operation](#checkpoints-and-parallel-operation)
+    - [Random or Directed Search](#random-or-directed-search)
+    - [Manual Trials](#manual-trials)
+  - [Encode Fingerprint Latent Representation](#encode-fingerprint-latent-representation)
+  - [Interpreting](#interpreting)
+  - [TensorBoard](#tensorboard)
+  - [Results](#results)
 
 ## Requirements
 
